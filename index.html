@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>청위 월례회의 엑셀 생성기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+  :root { --bg:#f6f7f9; --fg:#1d2330; --card:#fff; --line:#d5d9e0; --accent:#2a5bd7; --muted:#68707f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171d; --fg:#e8eaf0; --card:#1d222b; --line:#363d4a; --accent:#6c97ff; --muted:#9aa3b2; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif; line-height:1.5; }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  h2 { font-size:1rem; margin:0 0 10px; }
+  textarea, input { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:8px; }
+  #src { width:100%; height:220px; resize:vertical; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-top:10px; }
+  .row label { display:flex; gap:6px; align-items:center; }
+  input[type=number] { width:90px; }
+  button { font:inherit; border:0; border-radius:6px; padding:9px 16px; cursor:pointer; background:var(--accent); color:#fff; }
+  button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  .tablewrap { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; min-width:760px; }
+  th, td { border:1px solid var(--line); padding:4px; vertical-align:top; }
+  th { background:var(--bg); font-weight:600; }
+  td.name { width:90px; text-align:center; vertical-align:middle; font-weight:600; }
+  td textarea { width:100%; min-height:70px; resize:vertical; font-size:.9rem; }
+  .hint { color:var(--muted); font-size:.85rem; margin-top:8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>청소년위원회 월례회의 엑셀 생성기</h1>
+  <p class="sub">보고자료 텍스트를 붙여넣으면 분과별로 나눠 엑셀 표로 만들어 줍니다. 파일은 서버로 전송되지 않고 브라우저 안에서만 처리됩니다.</p>
+
+  <section>
+    <h2>1. 보고자료 입력</h2>
+    <textarea id="src" placeholder="---------------초등부---------------&#10;10월&#10;10/3(토) 가정주일&#10;..."></textarea>
+    <div class="row">
+      <input type="file" id="file" accept=".txt,text/plain">
+      <label>연도 <input type="number" id="year"></label>
+      <label>이번 달(실시) <input type="number" id="month" min="1" max="12"></label>
+      <button id="go">분과별로 나누기</button>
+    </div>
+    <div class="hint">월은 본문에서 자동 인식하며, 틀리면 직접 고치세요. 다음 달(예정)은 자동 계산됩니다.</div>
+  </section>
+
+  <section id="result" hidden>
+    <h2>2. 미리보기 (셀을 직접 고칠 수 있습니다)</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>분과</th><th id="h1">실시사항</th><th id="h2">예정사항</th><th>건의사항</th></tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+    <div class="row"><button id="dl">엑셀 다운로드</button></div>
+  </section>
+</main>
+
+<script src="parser.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var now = new Date();
+  $('year').value = now.getFullYear();
+
+  $('file').addEventListener('change', function (e) {
+    var f = e.target.files[0]; if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      var buf = r.result, txt = new TextDecoder('utf-8').decode(buf);
+      if (txt.indexOf('�') >= 0) txt = new TextDecoder('euc-kr').decode(buf); // 메모장 ANSI 저장 대응
+      $('src').value = txt; detect();
+    };
+    r.readAsArrayBuffer(f);
+  });
+  $('src').addEventListener('change', detect);
+  function detect() { if ($('src').value.trim()) $('month').value = Parser.detectMonth($('src').value); }
+
+  $('go').addEventListener('click', function () {
+    var text = $('src').value;
+    if (!text.trim()) { alert('보고자료를 붙여넣거나 txt 파일을 선택하세요.'); return; }
+    if (!$('month').value) detect();
+    var m = +$('month').value, n = m % 12 + 1;
+    $('h1').textContent = '실시사항 (' + m + '월)';
+    $('h2').textContent = '예정사항 (' + n + '월)';
+    var rows = Parser.parse(text, m), tb = $('tb');
+    tb.innerHTML = '';
+    rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      r.forEach(function (v, i) {
+        var td = document.createElement('td');
+        if (i === 0) { td.className = 'name'; td.textContent = v; }
+        else { var ta = document.createElement('textarea'); ta.value = v; td.appendChild(ta); }
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+    $('result').hidden = false;
+  });
+
+  function lineCount(s, colWidth) {
+    var cap = colWidth * 1.1, total = 0;
+    (s || '').split('\n').forEach(function (l) {
+      var w = 0; for (var i = 0; i < l.length; i++) w += l.charCodeAt(i) > 0x7f ? 2 : 1;
+      total += Math.max(1, Math.ceil(w / cap));
+    });
+    return total;
+  }
+
+  $('dl').addEventListener('click', async function () {
+    var year = $('year').value, month = $('month').value;
+    var data = [].map.call($('tb').rows, function (tr) {
+      return [tr.cells[0].textContent].concat([].map.call(tr.querySelectorAll('textarea'), function (t) { return t.value; }));
+    });
+    var wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Sheet1', {
+      pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+        horizontalCentered: true, margins: { left: .25, right: .25, top: .75, bottom: .75, header: 0, footer: 0 } }
+    });
+    var W = [11.05, 53.64, 55.29, 21.64];
+    W.forEach(function (w, i) { ws.getColumn(i + 1).width = w; });
+    var thin = { style: 'thin', color: { argb: 'FF7F7F7F' } }, box = { top: thin, left: thin, bottom: thin, right: thin };
+
+    ws.mergeCells('A1:D1');
+    var t = ws.getCell('A1');
+    t.value = year + '년 ' + month + '월 청소년위원회 월례회의';
+    t.font = { name: 'Malgun Gothic', size: 15, bold: true };
+    t.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 27; ws.getRow(2).height = 10.5;
+
+    ['분과', '실시사항', '예정사항', '건의사항'].forEach(function (h, i) {
+      var c = ws.getCell(3, i + 1);
+      c.value = h; c.font = { name: 'Malgun Gothic', size: 11 };
+      c.alignment = { horizontal: 'center' }; c.border = box;
+    });
+    ws.getRow(3).height = 16.5;
+
+    data.forEach(function (r, k) {
+      var row = 4 + k, lines = 1;
+      r.forEach(function (v, i) {
+        var c = ws.getCell(row, i + 1);
+        c.value = v; c.border = box;
+        if (i === 0) {
+          c.font = { name: 'Malgun Gothic', size: 11 };
+          c.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else {
+          c.font = { name: 'Malgun Gothic', size: 10 };
+          c.alignment = { vertical: 'top', wrapText: true };
+          lines = Math.max(lines, lineCount(v, W[i]));
+        }
+      });
+      ws.getRow(row).height = Math.max(37.5, lines * 14 + 8);
+    });
+
+    var buf = await wb.xlsx.writeBuffer();
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    a.download = year + '년' + month + '월 청위 월례회의.xlsx';
+    a.click(); URL.revokeObjectURL(a.href);
+  });
+})();
+</script>
+</body>
+</html>
