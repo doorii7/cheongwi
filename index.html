@@ -46,6 +46,7 @@
       <label>연도 <input type="number" id="year"></label>
       <label>이번 달(실시) <input type="number" id="month" min="1" max="12"></label>
       <button id="go">분과별로 나누기</button>
+      <button id="reset" class="ghost" type="button">초기화</button>
     </div>
     <div class="hint">월은 본문에서 자동 인식하며, 틀리면 직접 고치세요. 다음 달(예정)은 자동 계산됩니다.</div>
   </section>
@@ -83,6 +84,12 @@
   });
   $('src').addEventListener('change', detect);
   function detect() { if ($('src').value.trim()) $('month').value = Parser.detectMonth($('src').value); }
+
+  $('reset').addEventListener('click', function () {
+    $('src').value = ''; $('file').value = ''; $('month').value = '';
+    $('tb').innerHTML = ''; $('warn').textContent = ''; $('result').hidden = true;
+    $('src').focus();
+  });
 
   $('go').addEventListener('click', function () {
     var text = $('src').value;
