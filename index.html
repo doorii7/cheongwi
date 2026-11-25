@@ -52,6 +52,7 @@
 
   <section id="result" hidden>
     <h2>2. 미리보기 (셀을 직접 고칠 수 있습니다)</h2>
+    <div class="hint" id="warn" style="color:#c0392b;margin:0 0 8px"></div>
     <div class="tablewrap">
       <table>
         <thead><tr><th>분과</th><th id="h1">실시사항</th><th id="h2">예정사항</th><th>건의사항</th></tr></thead>
@@ -76,6 +77,7 @@
       var buf = r.result, txt = new TextDecoder('utf-8').decode(buf);
       if (txt.indexOf('�') >= 0) txt = new TextDecoder('euc-kr').decode(buf); // 메모장 ANSI 저장 대응
       $('src').value = txt; detect();
+      var fm = f.name.match(/(\d{1,2})\s*월/); if (fm) $('month').value = +fm[1]; // 파일명 우선
     };
     r.readAsArrayBuffer(f);
   });
@@ -101,6 +103,7 @@
       });
       tb.appendChild(tr);
     });
+    $('warn').textContent = (rows.warnings || []).join(' ');
     $('result').hidden = false;
   });
 
